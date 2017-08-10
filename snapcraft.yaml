@@ -16,14 +16,14 @@ parts:
             '*': blobs/
 
     u-boot-sd:
-        plugin: uboot
+        plugin: kbuild
         source: git://git.denx.de/u-boot.git
         source-branch: v2017.05
         kdefconfig: [dragonboard410c_defconfig]
         kconfigs:
             - CONFIG_CMD_MD5SUM=y
             - CONFIG_SYS_NO_FLASH=y
-        target-arch: arm
+        build-attributes: [no-install]
         build-packages: [device-tree-compiler, libfdt-dev, python, curl]
         prepare: |
             git am --3way ../../../sd_u-boot.patch
@@ -42,14 +42,14 @@ parts:
             ln -s uboot.env $SNAPCRAFT_PART_INSTALL/uboot.conf
 
     u-boot-emmc:
-        plugin: uboot
+        plugin: kbuild
         source: git://git.denx.de/u-boot.git
         source-branch: v2017.05
         kdefconfig: [dragonboard410c_defconfig]
         kconfigs:
             - CONFIG_CMD_MD5SUM=y
             - CONFIG_SYS_NO_FLASH=y
-        target-arch: arm
+        build-attributes: [no-install]
         build-packages: [device-tree-compiler, libfdt-dev, python, curl]
         prepare: |
             git am --3way ../../../emmc_u-boot.patch
