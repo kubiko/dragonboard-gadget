@@ -35,7 +35,13 @@ parts:
             git clone git://codeaurora.org/quic/kernel/skales
         override-build: |
             snapcraftctl build
-            touch initrd.img
+            mkdir -p dtbs
+            touch kernel.img initrd.img dtbs/apq8016-sbc.dtb
+            if [ -n "$KEYS" ] && [ -d "$KEYS" ] && [ -f ../../../fit-image.its ]; then \
+               cp ../../../fit-image.its .; \
+               tools/mkimage -D "-I dts -O dtb -p 2000" -f fit-image.its -k $KEYS -K arch/arm/dts/dragonboard410c.dtb -r image.itb; \
+               cat u-boot-nodtb.bin arch/arm/dts/dragonboard410c.dtb > u-boot.bin; \
+            fi
             skales/dtbTool -o u-boot-dt.img -s 2048 arch/arm/dts/
             mkdir -p $SNAPCRAFT_PART_INSTALL/blobs
             skales/mkbootimg --kernel=u-boot.bin \
@@ -68,7 +74,13 @@ parts:
             git clone git://codeaurora.org/quic/kernel/skales
         override-build: |
             snapcraftctl build
-            touch initrd.img
+            mkdir -p dtbs
+            touch kernel.img initrd.img dtbs/apq8016-sbc.dtb
+            if [ -n "$KEYS" ] && [ -d "$KEYS" ] && [ -f ../../../fit-image.its ]; then \
+               cp ../../../fit-image.its .; \
+               tools/mkimage -D "-I dts -O dtb -p 2000" -f fit-image.its -k $KEYS -K arch/arm/dts/dragonboard410c.dtb -r image.itb; \
+               cat u-boot-nodtb.bin arch/arm/dts/dragonboard410c.dtb > u-boot.bin; \
+            fi
             skales/dtbTool -o u-boot-dt.img -s 2048 arch/arm/dts/
             mkdir -p $SNAPCRAFT_PART_INSTALL/blobs
             skales/mkbootimg --kernel=u-boot.bin \
@@ -99,7 +111,13 @@ parts:
             git clone git://codeaurora.org/quic/kernel/skales
         override-build: |
             snapcraftctl build
-            touch initrd.img
+            mkdir -p dtbs
+            touch kernel.img initrd.img dtbs/apq8016-sbc.dtb
+            if [ -n "$KEYS" ] && [ -d "$KEYS" ] && [ -f ../../../fit-image.its ]; then \
+               cp ../../../fit-image.its .; \
+               tools/mkimage -D "-I dts -O dtb -p 2000" -f fit-image.its -k $KEYS -K arch/arm/dts/dragonboard410c.dtb -r image.itb; \
+               cat u-boot-nodtb.bin arch/arm/dts/dragonboard410c.dtb > u-boot.bin; \
+            fi
             skales/dtbTool -o u-boot-dt.img -s 2048 arch/arm/dts/
             mkdir -p $SNAPCRAFT_PART_INSTALL/blobs
             skales/mkbootimg --kernel=u-boot.bin \

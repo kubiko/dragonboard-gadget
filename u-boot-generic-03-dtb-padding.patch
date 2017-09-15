@@ -1,0 +1,26 @@
+From c85fcd05f51acd656a3f2b40b651740610094f0b Mon Sep 17 00:00:00 2001
+From: Ondrej Kubik <ondrej.kubik@canonical.com>
+Date: Tue, 12 Sep 2017 20:37:00 +0000
+Subject: [PATCH 2/5] Adding padding to dtb file, to include signing key
+
+Signed-off-by: Ondrej Kubik <ondrej.kubik@canonical.com>
+---
+ scripts/Makefile.lib | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/Makefile.lib b/scripts/Makefile.lib
+index 23be324..3c9b26f 100644
+--- a/scripts/Makefile.lib
++++ b/scripts/Makefile.lib
+@@ -313,7 +313,7 @@ cmd_dtc = mkdir -p $(dir ${dtc-tmp}) ; \
+ 	cat $< $(if $(u_boot_dtsi),\
+ 		| sed '/^\/ {$$/{x;s%$$%\#include \"$(u_boot_dtsi)\"%;G;}') | \
+ 		$(CPP) $(dtc_cpp_flags) -x assembler-with-cpp -o $(dtc-tmp) - ; \
+-	$(DTC) -O dtb -o $@ -b 0 \
++	$(DTC) -p 0x1000 -O dtb -o $@ -b 0 \
+ 		-i $(dir $<) $(DTC_FLAGS) \
+ 		-d $(depfile).dtc.tmp $(dtc-tmp) ; \
+ 	cat $(depfile).pre.tmp $(depfile).dtc.tmp > $(depfile)
+-- 
+2.7.4
+
