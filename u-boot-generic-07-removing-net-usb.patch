@@ -1,0 +1,30 @@
+From 0cb109c5ff3b5370f6b4774f136b3df4bdf6cc15 Mon Sep 17 00:00:00 2001
+From: Ondrej Kubik <ondrej.kubik@canonical.com>
+Date: Tue, 19 Sep 2017 14:27:19 +0000
+Subject: [PATCH 2/3] Removing net and usb functionality
+
+Signed-off-by: Ondrej Kubik <ondrej.kubik@canonical.com>
+---
+ configs/dragonboard410c_defconfig | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/configs/dragonboard410c_defconfig b/configs/dragonboard410c_defconfig
+index 6dfe7a1..9549fda 100644
+--- a/configs/dragonboard410c_defconfig
++++ b/configs/dragonboard410c_defconfig
+@@ -41,3 +41,12 @@ CONFIG_USB_STORAGE=y
+ # CONFIG_CMD_BOOTSTAGE is not set
+ # CONFIG_CMD_BOOTI is not set
+ # CONFIG_CMD_BOOTZ is not set
++# CONFIG_CMD_ELF is not set
++# CONFIG_CMD_USB is not set
++# CONFIG_CMD_NET is not set
++# CONFIG_CMD_NFS is not set
++# CONFIG_NET is not set
++# CONFIG_USB is not set
++# CONFIG_EFI_LOADER is not set
++# CONFIG_CMD_GO is not set
++# CONFIG_CMD_XIMG is not set
+-- 
+2.7.4
+

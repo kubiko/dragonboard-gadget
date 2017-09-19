@@ -1,0 +1,29 @@
+From 4caf3b9d015c53ceee54a830647bf4f7ba6f5196 Mon Sep 17 00:00:00 2001
+From: Ondrej Kubik <ondrej.kubik@canonical.com>
+Date: Tue, 19 Sep 2017 14:14:38 +0000
+Subject: [PATCH 1/2] Reducing boot targets
+
+Signed-off-by: Ondrej Kubik <ondrej.kubik@canonical.com>
+---
+ include/configs/dragonboard410c.h | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/include/configs/dragonboard410c.h b/include/configs/dragonboard410c.h
+index 6647f67..5e5b533 100644
+--- a/include/configs/dragonboard410c.h
++++ b/include/configs/dragonboard410c.h
+@@ -71,10 +71,8 @@
+ #define CONFIG_BOOTARGS "console=ttyMSM0,115200n8"
+ 
+ #define BOOT_TARGET_DEVICES(func) \
+-	func(USB, usb, 0) \
+ 	func(MMC, mmc, 1) \
+-	func(MMC, mmc, 0) \
+-	func(DHCP, dhcp, na)
++	func(MMC, mmc, 0)
+ 
+ #include <config_distro_bootcmd.h>
+ 
+-- 
+2.7.4
+

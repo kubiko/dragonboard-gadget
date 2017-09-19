@@ -1,0 +1,25 @@
+From 893a7a09838a1dbf7c95c033858c0f116d50495e Mon Sep 17 00:00:00 2001
+From: Ondrej Kubik <ondrej.kubik@canonical.com>
+Date: Tue, 19 Sep 2017 10:59:42 +0000
+Subject: [PATCH 1/1] Disabling other boot commands for secure boot
+
+Signed-off-by: Ondrej Kubik <ondrej.kubik@canonical.com>
+---
+ configs/dragonboard410c_defconfig | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/configs/dragonboard410c_defconfig b/configs/dragonboard410c_defconfig
+index 90c145a..6dfe7a1 100644
+--- a/configs/dragonboard410c_defconfig
++++ b/configs/dragonboard410c_defconfig
+@@ -37,3 +37,7 @@ CONFIG_USB_EHCI_MSM=y
+ CONFIG_USB_ULPI_VIEWPORT=y
+ CONFIG_USB_ULPI=y
+ CONFIG_USB_STORAGE=y
++# CONFIG_CMD_BOOTD is not set
++# CONFIG_CMD_BOOTSTAGE is not set
++# CONFIG_CMD_BOOTI is not set
++# CONFIG_CMD_BOOTZ is not set
+-- 
+2.7.4
+
