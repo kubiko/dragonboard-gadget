@@ -118,6 +118,7 @@ parts:
                tools/mkimage -D "-I dts -O dtb -p 2000" -f fit-image.its -k $KEYS -K arch/arm/dts/dragonboard410c.dtb -r image.itb; \
                cat u-boot-nodtb.bin arch/arm/dts/dragonboard410c.dtb > u-boot.bin; \
             fi
+            cp arch/arm/dts/dragonboard410c.dtb $SNAPCRAFT_PART_INSTALL
             skales/dtbTool -o u-boot-dt.img -s 2048 arch/arm/dts/
             mkdir -p $SNAPCRAFT_PART_INSTALL/blobs
             skales/mkbootimg --kernel=u-boot.bin \
