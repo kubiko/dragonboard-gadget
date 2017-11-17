@@ -1,0 +1,82 @@
+From 1851da274c50f918bfc02194d8780aa9cd08f12f Mon Sep 17 00:00:00 2001
+From: Ondrej Kubik <ondrej.kubik@canonical.com>
+Date: Fri, 17 Nov 2017 13:01:34 +0000
+Subject: [PATCH 1/1] Populating default environment variable set
+
+Signed-off-by: Ondrej Kubik <ondrej.kubik@canonical.com>
+---
+ include/configs/dragonboard410c.h | 58 +++++++++++++++++++++++++++++++--------
+ 1 file changed, 46 insertions(+), 12 deletions(-)
+
+diff --git a/include/configs/dragonboard410c.h b/include/configs/dragonboard410c.h
+index 6dedcf7..6122e97 100644
+--- a/include/configs/dragonboard410c.h
++++ b/include/configs/dragonboard410c.h
+@@ -103,18 +103,52 @@ REFLASH(dragonboard/u-boot.img, 8)\
+ 
+ /* Environment */
+ #define CONFIG_EXTRA_ENV_SETTINGS \
+-	"reflash="CONFIG_ENV_REFLASH"\0"\
+-	"loadaddr=0x81000000\0" \
+-	"fdt_high=0xffffffffffffffff\0" \
+-	"initrd_high=0xffffffffffffffff\0" \
+-	"linux_image=Image\0" \
+-	"kernel_addr_r=0x81000000\0"\
+-	"fdtfile=apq8016-sbc.dtb\0" \
+-	"fdt_addr_r=0x83000000\0"\
+-	"ramdisk_addr_r=0x84000000\0"\
+-	"scriptaddr=0x90000000\0"\
+-	"pxefile_addr_r=0x90100000\0"\
+-	BOOTENV
++      "arch=arm\0" \
++      "baudrate=115200\0" \
++      "board=dragonboard\0" \
++      "board_name=dragonboard\0" \
++      "bootcmd=echo ENVCMD; run snappy_boot\0" \
++      "bootdelay=0\0" \
++      "cpu=armv8\0" \
++      "kernel_file=kernel.img\0" \
++      "linux_itb_addr=0x90000000\0" \
++      "getargs=if test \"${load_device}\" = \"0:8\";" \
++                  "then fdt addr 0x81e00000;" \
++                  "else if test \"${load_device}\" = \"1:8\";" \
++                           "then fdt addr 0x81e00000;" \
++                           "else fdt addr 0x83e00000;" \
++                       "fi; " \
++                  "fi; " \
++                  "fdt get value args /chosen bootargs\0" \
++      "loadfiles=run getargs; run check_load_device; run loadkernel_itb\0" \
++      "check_load_device=if test -z \"${load_device}\";" \
++                            "then if fatsize mmc 1:8 uboot.env;" \
++                                     "then setenv load_device \"1:8\";" \
++                                     "else if fatsize mmc 0:8 uboot.env;" \
++                                              "then setenv load_device \"0:8\";" \
++                                              "else setenv load_device \"0:9\";" \
++                                          "fi; " \
++                                 "fi;saveenv;" \
++                        "fi;\0" \
++      "loadkernel_itb=fatload mmc ${load_device} ${linux_itb_addr} ${snap_kernel}/${kernel_file}\0" \
++      "mmcargs=setenv bootargs \"${args} console=ttyMSM0,115200n8 console=tty0 root=${mmcroot}\"\0" \
++      "snappy_boot=if test \"${snap_mode}\" = \"try\"; " \
++                      "then setenv snap_mode \"trying\"; saveenv; " \
++                           "if test \"${snap_try_core}\" != \"\"; " \
++                               "then setenv snap_core \"${snap_try_core}\"; " \
++                           "fi; " \
++                           "if test \"${snap_try_kernel}\" != \"\"; " \
++                               "then setenv snap_kernel \"${snap_try_kernel}\"; " \
++                           "fi; " \
++                      "elif test \"${snap_mode}\" = \"trying\"; " \
++                          "then setenv snap_mode \"\"; saveenv; " \
++                      "fi; " \
++                  "run loadfiles; setenv mmcroot \"/dev/disk/by-label/writable ${snappy_cmdline} snap_core=${snap_core} snap_kernel=${snap_kernel}\"; " \
++                  "run mmcargs; bootm ${linux_itb_addr}#config@1\0" \
++      "snappy_cmdline=net.ifnames=0 init=/lib/systemd/systemd ro rng_core.default_quality=700 panic=-1 fixrtc\0" \
++      "fdt_high=0xffffffffffffffff\0" \
++      "initrd_high=0xffffffffffffffff\0" \
++      BOOTENV
+ 
+ #define CONFIG_ENV_WHITELIST  "snap_mode","snap_core","snap_try_core","snap_kernel","snap_try_kernel", "load_device", NULL
+ #undef CONFIG_ENV_IS_NOWHERE
+-- 
+2.7.4
+
