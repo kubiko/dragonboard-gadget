@@ -202,9 +202,8 @@ parts:
     emmc-gpt-partition:
         plugin: nil
         source: https://git.linaro.org/landing-teams/working/qualcomm/db-boot-tools.git
-        build-packages: [gdisk, fakeroot]
+        build-packages: [gdisk, fakeroot, rename]
         override-build: |
-            mkdir -p $SNAPCRAFT_PART_INSTALL/blobs
             cp ../../../emmc-partitions.txt .
             cp ../../../emmc-sd-partitions.txt .
             sizes=$(grep -e 'size' ../../../gadget.yaml | awk -F ": " '{ print $2}')
@@ -222,8 +221,13 @@ parts:
             fakeroot ./mksdcard -g -o sd.img -p emmc-sd-partitions.txt
             fakeroot sgdisk -bgpt.bin emmc.img
             fakeroot sgdisk -bsdgpt.bin sd.img
-            fakeroot ./mkgpt -i gpt.bin -o $SNAPCRAFT_PART_INSTALL/blobs/gpt_emmc_both0.bin
-            fakeroot ./mkgpt -i sdgpt.bin -o $SNAPCRAFT_PART_INSTALL/blobs/gpt_emmc_sd_both0.bin
+            fakeroot ./mkgpt -i sdgpt.bin -a ${SNAPCRAFT_PART_INSTALL}
+            rename  's/gpt_/gpt_sd_/g' ${SNAPCRAFT_PART_INSTALL}/*
+            fakeroot ./mkgpt -i gpt.bin -a ${SNAPCRAFT_PART_INSTALL}
+            rename -v 's/\.bin$/0.bin/' ${SNAPCRAFT_PART_INSTALL}/gpt_*
+        organize:
+             '*': blobs/
+
     gcc-linaro-aarch64-6-2:
         plugin: dump
         source: http://releases.linaro.org/components/toolchain/binaries/6.2-2016.11/aarch64-linux-gnu/gcc-linaro-6.2.1-2016.11-x86_64_aarch64-linux-gnu.tar.xz
