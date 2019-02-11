@@ -18,8 +18,34 @@ parts:
     prebuilt:
         plugin: dump
         source: prebuilt
+        after:
+            - emmc-gpt-partition
         organize:
             '*': blobs/
+        build-packages:
+            - gdisk
+        override-build: |
+            snapcraftctl build
+            NEW_RAWPROG=${SNAPCRAFT_PART_INSTALL}/new-rawprogram0.xml
+            RAWPROG="${SNAPCRAFT_PART_INSTALL}/rawprogram0.xml"
+            GPT_BOTH=${SNAPCRAFT_STAGE}/blobs/gpt_both.bin
+            while read line
+            do
+                if [ -z "$(echo  $line | grep "label")" ]; then
+                    echo "${line}" >> ${NEW_RAWPROG}
+                else
+                    label=$(echo ${line} | sed -r 's/.*label="([^"]+).*/\1/')
+                    start_sector=$(sgdisk -p ${GPT_BOTH}  2>&1 | grep -w " $label" | awk '{print $2}')
+                    if [ -n "${start_sector}" ]; then
+                        start_byte_hex=$(sgdisk -p ${GPT_BOTH}  2>&1 | grep -w " $label" | awk '{printf "0x%x", $2*512}')
+                        new_line=$(echo $line | sed -e 's/start_sector=\".*\"/start_sector=\"'"${start_sector}"'\"/g' -e 's/start_byte_hex=\".*\" /start_byte_hex=\"'"${start_byte_hex}"'\" /g')
+                        echo "${new_line}" >> ${NEW_RAWPROG}
+                    else
+                        echo "${line}" >> ${NEW_RAWPROG}
+                    fi
+                fi
+            done < ${RAWPROG}
+            mv ${NEW_RAWPROG} ${RAWPROG}
 
     u-boot-sd:
         plugin: uboot
