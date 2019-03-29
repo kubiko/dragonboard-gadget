@@ -9,4 +9,8 @@ sec,sec-size,65536,303E6AC3-AF15-4C54-9E9B-D9A8FBECF401,,
 aboot,aboot-size,,400FFDCD-22E0-47E7-9A23-F16ED9382388,,emmc_appsboot.mbn
 boot,boot-size,,20117F86-E985-4357-B9EE-374BC1D8487D,,boot.img
 system-boot,system-boot-size,,EBD0A0A2-B9E5-4433-87C0-68B6B72699C7,,system-boot.img
+snapbootsel,snapbootsel-size,,B214D5E4-D442-45E6-B8C6-01BDCD82D396,,
+boot_1,boot_1-size,,20117F86-E985-4357-B9EE-374BC1D8487D,,
+boot_2,boot_1-size,,20117F86-E985-4357-B9EE-374BC1D8487D,,
+boot_3,boot_1-size,,20117F86-E985-4357-B9EE-374BC1D8487D,,
 writable,0,,0FC63DAF-8483-4772-8E79-3D69D8477DE4,fastboot,writable.img

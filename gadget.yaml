@@ -48,3 +48,19 @@ volumes:
         content:
           - source: blobs/
             target: blobs/
+      - name: snapbootsel
+        size: 131072
+        role: bootselect
+        type: B214D5E4-D442-45E6-B8C6-01BDCD82D396
+      - name: boot_1
+        size: 33554432
+        role: bootimg
+        type: 20117F86-E985-4357-B9EE-374BC1D8487D
+      - name: boot_2
+        size: 33554432
+        role: bootimg
+        type: 20117F86-E985-4357-B9EE-374BC1D8487D
+      - name: boot_3
+        size: 33554432
+        role: bootimg
+        type: 20117F86-E985-4357-B9EE-374BC1D8487D
