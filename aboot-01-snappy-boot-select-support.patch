@@ -1,0 +1,403 @@
+From 2ebb1a32585e37cffa2d4252e4d8410c52061dd4 Mon Sep 17 00:00:00 2001
+From: Ondrej Kubik <ondrej.kubik@canonical.com>
+Date: Sat, 6 Apr 2019 11:25:38 +0000
+Subject: [PATCH 1/1] Adding snappy support
+
+Signed-off-by: Ondrej Kubik <ondrej.kubik@canonical.com>
+---
+ app/aboot/aboot.c       |  35 +++++++++-
+ app/aboot/rules.mk      |   3 +-
+ app/aboot/snappy-boot.c | 174 ++++++++++++++++++++++++++++++++++++++++++++++++
+ app/aboot/snappy-boot.h |  85 +++++++++++++++++++++++
+ 4 files changed, 294 insertions(+), 3 deletions(-)
+ create mode 100644 app/aboot/snappy-boot.c
+ create mode 100644 app/aboot/snappy-boot.h
+
+diff --git a/app/aboot/aboot.c b/app/aboot/aboot.c
+index ac53cc1..5a9c67e 100644
+--- a/app/aboot/aboot.c
++++ b/app/aboot/aboot.c
+@@ -80,6 +80,7 @@
+ #include "board.h"
+ #include "scm.h"
+ #include "secapp_loader.h"
++#include "snappy-boot.h"
+ #include <menu_keys_detect.h>
+ #include <display_menu.h>
+ 
+@@ -119,6 +120,8 @@ struct fastboot_cmd_desc {
+ 
+ #define MAX_TAGS_SIZE   1024
+ 
++#define MAX_PARTITION_NAME_LEN (100)
++
+ /* make 4096 as default size to ensure EFS,EXT4's erasing */
+ #define DEFAULT_ERASE_SIZE  4096
+ #define MAX_PANEL_BUF_SIZE 128
+@@ -154,6 +157,7 @@ static const char *baseband_dsda    = " androidboot.baseband=dsda";
+ static const char *baseband_dsda2   = " androidboot.baseband=dsda2";
+ static const char *baseband_sglte2  = " androidboot.baseband=sglte2";
+ static const char *warmboot_cmdline = " qpnp-power-on.warm_boot=1";
++static const char *snappy_cmdline = " ";
+ 
+ #if VERIFIED_BOOT
+ #if !VBOOT_MOTA
+@@ -251,6 +255,8 @@ char panel_display_mode[MAX_RSP_SIZE];
+ char get_variant[MAX_RSP_SIZE];
+ char battery_voltage[MAX_RSP_SIZE];
+ 
++char snappy_cmdline_buf[512];
++
+ extern int emmc_recovery_init(void);
+ 
+ #if NO_KEYPAD_DRIVER
+@@ -321,6 +327,8 @@ unsigned char *update_cmdline(const char * cmdline)
+ 	cmdline_len += strlen(usb_sn_cmdline);
+ 	cmdline_len += strlen(sn_buf);
+ 
++	cmdline_len += strlen(snappy_cmdline);
++	cmdline_len += strlen(snappy_cmdline_buf);
+ #if VERIFIED_BOOT
+ #if !VBOOT_MOTA
+ 	cmdline_len += strlen(verified_state) + strlen(vbsn[boot_state].name);
+@@ -470,6 +478,16 @@ unsigned char *update_cmdline(const char * cmdline)
+ 		if (have_cmdline) --dst;
+ 		have_cmdline = 1;
+ 		while ((*dst++ = *src++));
++		// snappy cmdline
++		src = snappy_cmdline;
++		if (have_cmdline) --dst;
++		have_cmdline = 1;
++		while ((*dst++ = *src++));
++		src = snappy_cmdline_buf;
++		if (have_cmdline) --dst;
++		have_cmdline = 1;
++		while ((*dst++ = *src++));
++
+ 		if (warm_boot) {
+ 			if (have_cmdline) --dst;
+ 			src = warmboot_cmdline;
+@@ -1042,6 +1060,8 @@ int boot_linux_from_mmc(void)
+ 	unsigned char *kernel_start_addr = NULL;
+ 	unsigned int kernel_size = 0;
+ 	int rc;
++	char bootpart[MAX_PARTITION_NAME_LEN];
++	unsigned char *cmdline;
+ 
+ #if DEVICE_TREE
+ 	struct dt_table *table;
+@@ -1062,7 +1082,7 @@ int boot_linux_from_mmc(void)
+ 		if (rcode <= 0) {
+ 			boot_into_ffbm = false;
+ 			if (rcode < 0)
+-				dprintf(CRITICAL,"failed to get ffbm cookie");
++				dprintf(CRITICAL,"failed to get ffbm cookie\n");
+ 		} else
+ 			boot_into_ffbm = true;
+ 	} else
+@@ -1074,7 +1094,18 @@ int boot_linux_from_mmc(void)
+ 		goto unified_boot;
+ 	}
+ 	if (!boot_into_recovery) {
+-		index = partition_get_index("boot");
++	  dprintf(INFO, "checking snap boot configuration\n");
++		bootpart[0] = '\0';
++		snap_get_target_boot_params(bootpart, snappy_cmdline_buf, sizeof(snappy_cmdline_buf));
++		if (strlen(bootpart)) {
++			dprintf(INFO, "snappy: controlled boot partition[%s]\n", bootpart);
++			dprintf(INFO, "snappy: cmdline[%s]\n", snappy_cmdline_buf);
++			index = partition_get_index(bootpart);
++		}
++		else
++		{
++		  index = partition_get_index("boot");
++		}
+ 		ptn = partition_get_offset(index);
+ 		if(ptn == 0) {
+ 			dprintf(CRITICAL, "ERROR: No boot partition found\n");
+diff --git a/app/aboot/rules.mk b/app/aboot/rules.mk
+index 3606cb4..05875c9 100644
+--- a/app/aboot/rules.mk
++++ b/app/aboot/rules.mk
+@@ -9,5 +9,6 @@ MODULES += lib/zlib_inflate
+ OBJS += \
+ 	$(LOCAL_DIR)/aboot.o \
+ 	$(LOCAL_DIR)/fastboot.o \
+-	$(LOCAL_DIR)/recovery.o
++	$(LOCAL_DIR)/recovery.o \
++        $(LOCAL_DIR)/snappy-boot.o
+ 
+diff --git a/app/aboot/snappy-boot.c b/app/aboot/snappy-boot.c
+new file mode 100644
+index 0000000..3b3ca95
+--- /dev/null
++++ b/app/aboot/snappy-boot.c
+@@ -0,0 +1,174 @@
++/* Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
++
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions are
++ * met:
++ *   * Redistributions of source code must retain the above copyright
++ *     notice, this list of conditions and the following disclaimer.
++ *   * Redistributions in binary form must reproduce the above
++ *     copyright notice, this list of conditions and the following
++ *     disclaimer in the documentation and/or other materials provided
++ *     with the distribution.
++ *   * Neither the name of The Linux Foundation nor the names of its
++ *     contributors may be used to endorse or promote products derived
++ *     from this software without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
++ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
++ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
++ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
++ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
++ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
++ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
++ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
++ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
++ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#include <debug.h>
++#include <arch/arm.h>
++#include <dev/udc.h>
++#include <string.h>
++#include <kernel/thread.h>
++#include <arch/ops.h>
++#include <arch/defines.h>
++#include <malloc.h>
++
++#include <dev/flash.h>
++#include <lib/ptable.h>
++#include <dev/keys.h>
++#include <platform.h>
++#include <target.h>
++#include <partition_parser.h>
++#include <mmc.h>
++
++#include "snappy-boot.h"
++#include "smem.h"
++
++#include <stdlib.h>
++#include "scm.h"
++
++static uint32_t crc32(uint32_t crc, unsigned char *buf, size_t len)
++{
++    int k;
++
++    crc = ~crc;
++    while (len--) {
++        crc ^= *buf++;
++        for (k = 0; k < 8; k++)
++            crc = crc & 1 ? (crc >> 1) ^ 0xedb88320 : crc >> 1;
++    }
++    return ~crc;
++}
++
++
++static int map_bootimg( const SNAP_BOOT_SELECTION_t *boot_select, const char *snap_kernel, char *bootpart);
++static int save_environment(SNAP_BOOT_SELECTION_t *boot_select);
++void snap_get_target_boot_params(char *bootpart, char *cmdline, int cmd_len)
++{
++    unsigned long long ptn = 0;
++    // unsigned offset = 0;
++    uint32_t block_size = mmc_get_device_blocksize();
++    uint32_t actual_struct_size, crc;
++    SNAP_BOOT_SELECTION_t *boot_select = NULL;
++    char *snap_core, *snap_kernel;
++
++    int index = INVALID_PTN;
++    index = partition_get_index(SNAP_BOOTSELECT_PARTITION);
++    ptn = partition_get_offset(index);
++
++    if(ptn == 0)
++    {
++        dprintf(CRITICAL, "snap: get_boot_select: ERROR: No %s partition found\n", SNAP_BOOTSELECT_PARTITION);
++        goto cleanup;
++    }
++
++    actual_struct_size = ROUNDUP(sizeof(SNAP_BOOT_SELECTION_t), block_size);
++    boot_select = malloc(actual_struct_size);
++    if (boot_select == NULL)
++    {
++        dprintf(CRITICAL, "snap: get_boot_select: ERROR, cannot allocate SNAP_BOOT_SELECTION\n");
++        goto cleanup;
++    }
++
++    if(mmc_read(ptn, (void *)boot_select, actual_struct_size))
++    {
++        dprintf(CRITICAL, "snap: get_boot_select: read SNAP_BOOT_SELECTION: ERROR, cannot read Snap boot select info\n");
++        goto cleanup;
++    }
++
++    dprintf(SPEW, "snap: get_boot_select: read SNAP_BOOT_SELECTION: SUCCESS, read %d bytes\n", actual_struct_size);
++    crc = crc32( 0, (unsigned char *)boot_select, sizeof(SNAP_BOOT_SELECTION_t)-sizeof(uint32_t));
++    if ( boot_select->crc32 != crc )
++    {
++        dprintf(CRITICAL, "snap: get_boot_select: ERROR crc32 broken [0x%X] vs [0x%X]!\n", boot_select->crc32, crc );
++        // goto cleanup;
++    } else {
++        dprintf(INFO, "snap: get_boot_select: crc32 sucessfully validated\n" );
++  }
++    snap_core = boot_select->snap_core;
++    snap_kernel = boot_select->snap_kernel;
++    if ( !strncmp(boot_select->snap_mode, SNAP_MODE_TRY, SNAP_MODE_LENGTH)) {
++        strncpy(boot_select->snap_mode, SNAP_MODE_TRYING, SNAP_MODE_LENGTH );
++        if (save_environment(boot_select))
++            goto cleanup;
++        if ( strlen(boot_select->snap_try_core)) {
++            snap_core = boot_select->snap_try_core;
++        }
++        if (strlen( boot_select->snap_try_kernel)) {
++            snap_kernel = boot_select->snap_try_kernel;
++        }
++    } else if ( !strncmp(boot_select->snap_mode, SNAP_MODE_TRYING, SNAP_MODE_LENGTH)) {
++        boot_select->snap_mode[0] = 0;
++        if (save_environment(boot_select))
++            goto cleanup;
++    }
++    map_bootimg(boot_select, snap_kernel, bootpart);
++    snprintf(cmdline, cmd_len, "snap_core=%s snap_kernel=%s", snap_core, snap_kernel);
++
++    cleanup:
++        if(boot_select)
++            free(boot_select);
++}
++
++int map_bootimg( const SNAP_BOOT_SELECTION_t *boot_select, const char *snap_kernel, char *bootpart)
++{
++    for (size_t n = 0; n < boot_select->boot_part_num; ++n) {
++        if (!strncmp(boot_select->bootimg_matrix[n][1], snap_kernel, SNAP_NAME_MAX_LEN)) {
++            if (strlen(boot_select->bootimg_matrix[n][0])) {
++                strncpy(bootpart, boot_select->bootimg_matrix[n][0], SNAP_NAME_MAX_LEN);
++                return 0;
++            }
++        }
++    }
++    dprintf(CRITICAL, "snap: map_bootimg: did not find valid boot partition!!!\n");
++    return -1;
++}
++
++static int save_environment( SNAP_BOOT_SELECTION_t *boot_select)
++{
++    unsigned long long ptn = 0;
++    uint32_t block_size = mmc_get_device_blocksize();
++
++    int index = INVALID_PTN;
++
++    ASSERT(boot_select != NULL);
++    boot_select->crc32 = crc32( 0, (unsigned char *)boot_select, sizeof(SNAP_BOOT_SELECTION_t)-sizeof(uint32_t));
++
++    index = partition_get_index(SNAP_BOOTSELECT_PARTITION);
++    ptn = partition_get_offset(index);
++
++    if(ptn == 0)
++    {
++        dprintf(CRITICAL, "snap: save_environment: ERROR: No %s partition found\n", SNAP_BOOTSELECT_PARTITION);
++        return -1;
++    }
++
++    if(mmc_write(ptn, ROUNDUP(sizeof(SNAP_BOOT_SELECTION_t), block_size), (void *)boot_select))
++    {
++        dprintf(CRITICAL, "snap: save_environment: ERROR, cannot write SNAP_BOOTSELECT info\n");
++        return -1;
++    }
++    return 0;
++}
+diff --git a/app/aboot/snappy-boot.h b/app/aboot/snappy-boot.h
+new file mode 100644
+index 0000000..ee554f0
+--- /dev/null
++++ b/app/aboot/snappy-boot.h
+@@ -0,0 +1,85 @@
++/*
++ * Copyright (C) 2018 Canonical Ltd
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 3 as
++ * published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#ifndef _BOOTLOADER_SNAP_BOOT_H
++#define _BOOTLOADER_SNAP_BOOT_H
++
++#define SNAP_BOOTSELECT_VERSION   0x00010001
++#define SNAP_BOOTSELECT_SIGNATURE ('S' | ('B' << 8) | ('s' << 16) | ('e' << 24))
++#define SNAP_NAME_MAX_LEN (256)
++#define HASH_LENGTH (32)
++#define SNAP_MODE_LENGTH (8)
++#define SNAP_MODE_TRY "try"
++#define SNAP_MODE_TRYING "trying"
++
++/* partition label where boot select structure is stored */
++#define SNAP_BOOTSELECT_PARTITION "snapbootsel"
++
++/* number of avaiable bootimg partitions, min 2 */
++#define SNAP_BOOTIMG_PART_NUM_MAX 5
++
++/* snappy bootselect partition format structure */
++typedef struct SNAP_BOOT_SELECTION {
++    /* Contains value BOOTSELECT_SIGNATURE defined above */
++    uint32_t signature;
++    /* snappy boot select version */
++    uint32_t version;
++    /* number of available boot partitions */
++    uint32_t boot_part_num;
++
++    /* snap_mode, one of: 'empty', "try", "trying" */
++    char snap_mode[SNAP_MODE_LENGTH];
++    /* current core snap revision */
++    char snap_core[SNAP_NAME_MAX_LEN];
++    /* try core snap revision  */
++    char snap_try_core[SNAP_NAME_MAX_LEN];
++    /* current kernel snap revision*/
++    char snap_kernel[SNAP_NAME_MAX_LEN];
++    /* current kernel snap revision*/
++    char snap_try_kernel[SNAP_NAME_MAX_LEN];
++    /**
++      Matrix for mapping of boot img partion to installed kernel snap revision
++      At image build time:
++        - snap prepare populates:
++             - snap_mode, snap_core, snap_kernel
++             - fills matrix first column with bootimage part names based on
++               gadget.yaml file where we will support multiple occurance of role: bootimg
++             - fills boot_part_num with number of actually available boot partitions
++             - in matrix fills first line second element with current kernel snap revision
++        - snapd:
++             - when new kernel snap is installed, snap updates mapping in matrix so
++               bootloader can pick correct kernel snap to use for boot
++             - snap_mode, snap_try_kernel, snap_try_core behaves same way as with u-boot
++             - boot partition labels are never modified by snapd at run time
++        - bootloader:
++             - Finds boot partition to use based on info in matrix and snap_kernel / snap_try_kernel
++             - bootloaer does not alter matrix, only alters snap_mode
++
++        [ <bootimg 1 part label> ] [ <currently installed kernel snap revison> ]
++        [ <bootimg 2 part label> ] [ <currently installed kernel snap revision> ]
++        [ <bootimg 3 part label> ] [ <currently installed kernel snap revision> ]
++        [ <bootimg 4 part label> ] [ <currently installed kernel snap revision> ]
++        [ <bootimg 5 part label> ] [ <currently installed kernel snap revision> ]
++    */
++    char bootimg_matrix[SNAP_BOOTIMG_PART_NUM_MAX][2][SNAP_NAME_MAX_LEN];
++    /* crc32 value for structure */
++    uint32_t crc32;
++} SNAP_BOOT_SELECTION_t;
++
++void snap_get_target_boot_params(char *bootpart, char *cmdline, int cmd_len);
++
++#endif
+-- 
+2.7.4
+

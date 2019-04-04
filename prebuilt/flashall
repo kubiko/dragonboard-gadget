@@ -8,11 +8,8 @@ fastboot flash tz tz.mbn
 fastboot flash sec sec.dat
 fastboot flash cdt sbc_1.0_8016.bin
 fastboot flash aboot emmc_appsboot.mbn
-
-fastboot erase boot
-fastboot erase system-boot
 fastboot erase writable
 
-fastboot flash boot emmc_u-boot.img
-fastboot flash system-boot system-boot.img
+fastboot flash boot_1 boot.img
+fastboot flash snapbootsel snapbootsel.bin
 fastboot flash writable writable.img
