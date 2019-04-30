@@ -1,0 +1,474 @@
+From 2925a25b522f1a25bff6493a024d54e62dd8688e Mon Sep 17 00:00:00 2001
+From: Ondrej Kubik <ondrej.kubik@canonical.com>
+Date: Fri, 26 Apr 2019 14:59:21 +0000
+Subject: [PATCH 1/5] add snappy boot support
+
+Adding loggic and message passing capabilities betweek bootloader and snapd
+Feature is controlled through compile flag:
+SNAPPY_BOOT=1
+
+Signed-off-by: Ondrej Kubik <ondrej.kubik@canonical.com>
+---
+ app/aboot/aboot.c          |  36 ++++++++
+ app/aboot/rules.mk         |   4 +
+ app/aboot/snappy_boot.c    | 180 +++++++++++++++++++++++++++++++++++++
+ app/aboot/snappy_boot.h    |  25 ++++++
+ app/aboot/snappy_boot_v1.h | 117 ++++++++++++++++++++++++
+ makefile                   |   4 +
+ 6 files changed, 366 insertions(+)
+ create mode 100644 app/aboot/snappy_boot.c
+ create mode 100644 app/aboot/snappy_boot.h
+ create mode 100644 app/aboot/snappy_boot_v1.h
+
+diff --git a/app/aboot/aboot.c b/app/aboot/aboot.c
+index ac53cc1f..8f911062 100644
+--- a/app/aboot/aboot.c
++++ b/app/aboot/aboot.c
+@@ -83,6 +83,10 @@
+ #include <menu_keys_detect.h>
+ #include <display_menu.h>
+ 
++#if SNAPPY_BOOT
++#include "snappy_boot.h"
++#endif
++
+ extern  bool target_use_signed_kernel(void);
+ extern void platform_uninit(void);
+ extern void target_uninit(void);
+@@ -251,6 +255,10 @@ char panel_display_mode[MAX_RSP_SIZE];
+ char get_variant[MAX_RSP_SIZE];
+ char battery_voltage[MAX_RSP_SIZE];
+ 
++#if SNAPPY_BOOT
++static const char *snappy_cmdline = NULL;
++#endif
++
+ extern int emmc_recovery_init(void);
+ 
+ #if NO_KEYPAD_DRIVER
+@@ -321,6 +329,12 @@ unsigned char *update_cmdline(const char * cmdline)
+ 	cmdline_len += strlen(usb_sn_cmdline);
+ 	cmdline_len += strlen(sn_buf);
+ 
++#if SNAPPY_BOOT
++	if (snappy_cmdline) {
++		cmdline_len += strlen(snappy_cmdline);
++	}
++#endif
++
+ #if VERIFIED_BOOT
+ #if !VBOOT_MOTA
+ 	cmdline_len += strlen(verified_state) + strlen(vbsn[boot_state].name);
+@@ -470,6 +484,15 @@ unsigned char *update_cmdline(const char * cmdline)
+ 		if (have_cmdline) --dst;
+ 		have_cmdline = 1;
+ 		while ((*dst++ = *src++));
++#if SNAPPY_BOOT
++		// snappy cmdline
++		if (snappy_cmdline) {
++			src = snappy_cmdline;
++			if (have_cmdline) --dst;
++			have_cmdline = 1;
++			while ((*dst++ = *src++));
++		}
++#endif
+ 		if (warm_boot) {
+ 			if (have_cmdline) --dst;
+ 			src = warmboot_cmdline;
+@@ -1042,6 +1065,9 @@ int boot_linux_from_mmc(void)
+ 	unsigned char *kernel_start_addr = NULL;
+ 	unsigned int kernel_size = 0;
+ 	int rc;
++#if SNAPPY_BOOT
++	const char *bootpart;
++#endif
+ 
+ #if DEVICE_TREE
+ 	struct dt_table *table;
+@@ -1074,6 +1100,16 @@ int boot_linux_from_mmc(void)
+ 		goto unified_boot;
+ 	}
+ 	if (!boot_into_recovery) {
++#if SNAPPY_BOOT
++		dprintf(INFO, "checking snap boot configuration\n");
++		snap_get_target_boot_params(&bootpart, &snappy_cmdline);
++		if (strlen(bootpart)) {
++			dprintf(INFO, "snappy: controlled boot partition[%s]\n", bootpart);
++			dprintf(INFO, "snappy: cmdline[%s]\n", snappy_cmdline);
++			index = partition_get_index(bootpart);
++		}
++		else
++#endif
+ 		index = partition_get_index("boot");
+ 		ptn = partition_get_offset(index);
+ 		if(ptn == 0) {
+diff --git a/app/aboot/rules.mk b/app/aboot/rules.mk
+index 3606cb41..71f1bcfe 100644
+--- a/app/aboot/rules.mk
++++ b/app/aboot/rules.mk
+@@ -11,3 +11,7 @@ OBJS += \
+ 	$(LOCAL_DIR)/fastboot.o \
+ 	$(LOCAL_DIR)/recovery.o
+ 
++ifeq ($(SNAPPY_BOOT), 1)
++OBJS += \
++	$(LOCAL_DIR)/snappy_boot.o
++endif
+diff --git a/app/aboot/snappy_boot.c b/app/aboot/snappy_boot.c
+new file mode 100644
+index 00000000..38011d80
+--- /dev/null
++++ b/app/aboot/snappy_boot.c
+@@ -0,0 +1,180 @@
++/**
++ * Copyright (C) 2019 Canonical Ltd
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 3 as
++  * published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#include <stdlib.h>
++#include <debug.h>
++#include <dev/udc.h>
++#include <string.h>
++#include <kernel/thread.h>
++#include <arch/ops.h>
++#include <arch/defines.h>
++#include <malloc.h>
++
++#include <arch/arm.h>
++#include <dev/flash.h>
++#include <partition_parser.h>
++#include <mmc.h>
++
++#include <lib/ptable.h>
++#include <dev/keys.h>
++#include <platform.h>
++#include <target.h>
++
++
++#include "snappy_boot.h"
++#include "smem.h"
++#include "scm.h"
++
++
++static char cmdline_buf[512];
++
++static uint32_t crc32(uint32_t crc, unsigned char *buf, size_t len)
++{
++    int k;
++
++    crc = ~crc;
++    while (len--) {
++        crc ^= *buf++;
++        for (k = 0; k < 8; k++)
++            crc = crc & 1 ? (crc >> 1) ^ 0xedb88320 : crc >> 1;
++    }
++    return ~crc;
++}
++
++
++static int map_bootimg( const SNAP_BOOT_SELECTION_t *boot_select, const char *snap_kernel, const char **bootpart);
++static int save_environment(SNAP_BOOT_SELECTION_t *boot_select);
++
++void snap_get_target_boot_params(const char **bootpart, const char **cmdline)
++{
++    unsigned long long ptn = 0;
++    uint32_t block_size = mmc_get_device_blocksize();
++    uint32_t actual_struct_size, crc;
++    SNAP_BOOT_SELECTION_t *boot_select = NULL;
++    char *snap_core, *snap_kernel;
++    char *reboot_reason = NULL;
++    int index = INVALID_PTN;
++    index = partition_get_index(SNAP_BOOTSELECT_PARTITION);
++    ptn = partition_get_offset(index);
++
++    if(ptn == 0)
++    {
++        dprintf(CRITICAL, "snap: get_boot_select: ERROR: No %s partition found\n", SNAP_BOOTSELECT_PARTITION);
++        goto cleanup;
++    }
++
++    actual_struct_size = ROUNDUP(sizeof(SNAP_BOOT_SELECTION_t), block_size);
++    boot_select = malloc(actual_struct_size);
++    if (boot_select == NULL)
++    {
++        dprintf(CRITICAL, "snap: get_boot_select: ERROR, cannot allocate SNAP_BOOT_SELECTION\n");
++        goto cleanup;
++    }
++
++    if(mmc_read(ptn, (void *)boot_select, actual_struct_size))
++    {
++        dprintf(CRITICAL, "snap: get_boot_select: read SNAP_BOOT_SELECTION: ERROR, cannot read Snap boot select info\n");
++        goto cleanup;
++    }
++
++    dprintf(SPEW, "snap: get_boot_select: read SNAP_BOOT_SELECTION: SUCCESS, read %d bytes\n", actual_struct_size);
++    crc = crc32( 0, (unsigned char *)boot_select, sizeof(SNAP_BOOT_SELECTION_t)-sizeof(uint32_t));
++    if ( boot_select->version != SNAP_BOOTSELECT_VERSION || boot_select->signature != SNAP_BOOTSELECT_SIGNATURE )
++    {
++        dprintf(CRITICAL, "snap: get_boot_select: ERROR version/signature broken [0x%X] vs [0x%X], [0x%X] vs [0x%X]!\n", boot_select->version, SNAP_BOOTSELECT_VERSION, boot_select->signature, SNAP_BOOTSELECT_SIGNATURE);
++        goto cleanup;
++    }
++    if ( boot_select->crc32 != crc )
++    {
++        dprintf(CRITICAL, "snap: get_boot_select: ERROR crc32 broken [0x%X] vs [0x%X]!\n", boot_select->crc32, crc );
++        goto cleanup;
++    } else {
++        dprintf(INFO, "snap: get_boot_select: crc32 sucessfully validated\n" );
++    }
++    snap_core = boot_select->snap_core;
++    snap_kernel = boot_select->snap_kernel;
++    if ( !strncmp(boot_select->snap_mode, SNAP_MODE_TRY, SNAP_MODE_LENGTH)) {
++        strncpy(boot_select->snap_mode, SNAP_MODE_TRYING, SNAP_MODE_LENGTH );
++        if (save_environment(boot_select))
++            goto cleanup;
++        if ( strlen(boot_select->snap_try_core)) {
++            snap_core = boot_select->snap_try_core;
++        }
++        if (strlen( boot_select->snap_try_kernel)) {
++            snap_kernel = boot_select->snap_try_kernel;
++        }
++    } else if ( !strncmp(boot_select->snap_mode, SNAP_MODE_TRYING, SNAP_MODE_LENGTH)) {
++        boot_select->snap_mode[0] = 0;
++        if (save_environment(boot_select))
++            goto cleanup;
++    }
++    // update boot reason, keep environment value to handle incomplete factory-reset
++    // if all succeeds new environment is restored from backup
++    if ( !strncmp(boot_select->reboot_reason, FACTORY_RESET, strlen(FACTORY_RESET))) {
++      reboot_reason = boot_select->reboot_reason;
++    }
++    map_bootimg(boot_select, snap_kernel, bootpart);
++    if (reboot_reason)
++        snprintf(cmdline_buf, sizeof(cmdline_buf), " snap_core=%s snap_kernel=%s %s ", snap_core, snap_kernel, reboot_reason);
++    else
++        snprintf(cmdline_buf, sizeof(cmdline_buf), " snap_core=%s snap_kernel=%s ", snap_core, snap_kernel);
++    *cmdline = cmdline_buf;
++    cleanup:
++        if(boot_select)
++            free(boot_select);
++}
++
++int map_bootimg( const SNAP_BOOT_SELECTION_t *boot_select, const char *snap_kernel, const char **bootpart)
++{
++    for (size_t n = 0; n < SNAP_BOOTIMG_PART_NUM; ++n) {
++        if (!strncmp(boot_select->bootimg_matrix[n][1], snap_kernel, SNAP_NAME_MAX_LEN)) {
++            if (strlen(boot_select->bootimg_matrix[n][0])) {
++                *bootpart = boot_select->bootimg_matrix[n][0];
++                return 0;
++            }
++        }
++    }
++    dprintf(CRITICAL, "snap: map_bootimg: did not find valid boot partition!!!\n");
++    return -1;
++}
++
++static int save_environment( SNAP_BOOT_SELECTION_t *boot_select)
++{
++    unsigned long long ptn = 0;
++    uint32_t block_size = mmc_get_device_blocksize();
++
++    int index = INVALID_PTN;
++
++    ASSERT(boot_select != NULL);
++    boot_select->crc32 = crc32( 0, (unsigned char *)boot_select, sizeof(SNAP_BOOT_SELECTION_t)-sizeof(uint32_t));
++
++    index = partition_get_index(SNAP_BOOTSELECT_PARTITION);
++    ptn = partition_get_offset(index);
++
++    if(ptn == 0)
++    {
++        dprintf(CRITICAL, "snap: save_environment: ERROR: No %s partition found\n", SNAP_BOOTSELECT_PARTITION);
++        return -1;
++    }
++
++    if(mmc_write(ptn, ROUNDUP(sizeof(SNAP_BOOT_SELECTION_t), block_size), (void *)boot_select))
++    {
++        dprintf(CRITICAL, "snap: save_environment: ERROR, cannot write SNAP_BOOTSELECT info\n");
++        return -1;
++    }
++    return 0;
++}
+diff --git a/app/aboot/snappy_boot.h b/app/aboot/snappy_boot.h
+new file mode 100644
+index 00000000..4d96b93c
+--- /dev/null
++++ b/app/aboot/snappy_boot.h
+@@ -0,0 +1,25 @@
++/**
++ * Copyright (C) 2019 Canonical Ltd
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 3 as
++ * published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#ifndef _BOOTLOADER_SNAP_BOOT_H
++#define _BOOTLOADER_SNAP_BOOT_H
++
++#include "snappy_boot_v1.h"
++
++void snap_get_target_boot_params(const char **bootpart, const char **cmdline);
++
++#endif
+diff --git a/app/aboot/snappy_boot_v1.h b/app/aboot/snappy_boot_v1.h
+new file mode 100644
+index 00000000..9e7f1b57
+--- /dev/null
++++ b/app/aboot/snappy_boot_v1.h
+@@ -0,0 +1,117 @@
++/**
++ * Copyright (C) 2019 Canonical Ltd
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 3 as
++ * published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
++ *
++ */
++
++#ifndef _BOOTLOADER_SNAP_BOOT_V1_H
++#define _BOOTLOADER_SNAP_BOOT_V1_H
++
++#define SNAP_BOOTSELECT_VERSION   0x00010001
++#define SNAP_BOOTSELECT_SIGNATURE ('S' | ('B' << 8) | ('s' << 16) | ('e' << 24))
++#define SNAP_NAME_MAX_LEN (256)
++#define HASH_LENGTH (32)
++#define SNAP_MODE_LENGTH (8)
++#define SNAP_MODE_TRY "try"
++#define SNAP_MODE_TRYING "trying"
++#define FACTORY_RESET "factory-reset"
++
++/* partition label where boot select structure is stored */
++#define SNAP_BOOTSELECT_PARTITION "snapbootsel"
++
++/* number of avaiable bootimg partitions, min 2 */
++#define SNAP_BOOTIMG_PART_NUM 2
++
++/* snappy bootselect partition format structure */
++typedef struct SNAP_BOOT_SELECTION {
++    /* Contains value BOOTSELECT_SIGNATURE defined above */
++    uint32_t signature;
++    /* snappy boot select version */
++    uint32_t version;
++
++    /* snap_mode, one of: 'empty', "try", "trying" */
++    char snap_mode[SNAP_MODE_LENGTH];
++    /* current core snap revision */
++    char snap_core[SNAP_NAME_MAX_LEN];
++    /* try core snap revision */
++    char snap_try_core[SNAP_NAME_MAX_LEN];
++    /* current kernel snap revision */
++    char snap_kernel[SNAP_NAME_MAX_LEN];
++    /* current kernel snap revision */
++    char snap_try_kernel[SNAP_NAME_MAX_LEN];
++
++    /* GADGET assets: current gadget assets revision */
++    char snap_gadget[SNAP_NAME_MAX_LEN];
++    /* GADGET assets: try gadget assets revision */
++    char snap_try_gadget [SNAP_NAME_MAX_LEN];
++
++    /**
++     Reboot reason
++     Optional parameter to signal bootloader alternative reboot reasons
++     e.g. recovery/factory-reset/boot asset update
++    */
++    char reboot_reason[SNAP_NAME_MAX_LEN];
++
++	/**
++      Matrix for mapping of boot img partion to installed kernel snap revision
++      At image build time:
++        - snap prepare populates:
++             - fills matrix first column with bootimage part names based on
++               gadget.yaml file where we will support multiple occurance of role: bootimg
++             - fills boot_part_num with number of actually available boot partitions
++        - snapd:
++             - when new kernel snap is installed, snap updates mapping in matrix so
++               bootloader can pick correct kernel snap to use for boot
++             - snap_mode, snap_try_kernel, snap_try_core behaves same way as with u-boot
++             - boot partition labels are never modified by snapd at run time
++        - bootloader:
++             - Finds boot partition to use based on info in matrix and snap_kernel / snap_try_kernel
++             - bootloaer does not alter matrix, only alters snap_mode
++
++        [ <bootimg 1 part label> ] [ <currently installed kernel snap revison> ]
++        [ <bootimg 2 part label> ] [ <currently installed kernel snap revision> ]
++    */
++    char bootimg_matrix[SNAP_BOOTIMG_PART_NUM][2][SNAP_NAME_MAX_LEN];
++
++    /* name of the boot image from kernel snap to be used for extraction
++       when not defined or empty, default boot.img will be used */
++    char bootimg_file_name[SNAP_NAME_MAX_LEN];
++
++    /**
++     GADGET assets: Matrix for mapping of gadget asset partions
++     Optional boot asset tracking, based on bootloader support
++     Some boot chains support A/B boot assets for increased robustness
++     example being A/B TrustExecutionEnvironment
++     This matrix can be used to track current and try boot assets for
++     robust updates
++
++     [ <boot assets 1 part label> ] [ <currently installed assets revison> ]
++     [ <boot assets 2 part label> ] [ <currently installed assets revision> ]
++    */
++    char boot_asset_matrix [SNAP_BOOTIMG_PART_NUM][2][SNAP_NAME_MAX_LEN];
++
++    /* unused placeholders for additional parameters to be used  in the future */
++    char unused_key_1 [SNAP_NAME_MAX_LEN];
++    char unused_key_2 [SNAP_NAME_MAX_LEN];
++    char unused_key_3 [SNAP_NAME_MAX_LEN];
++    char unused_key_4 [SNAP_NAME_MAX_LEN];
++
++    /* unused array of 10 key - value pairs */
++    char key_value_pairs [10][2][SNAP_NAME_MAX_LEN];
++
++    /* crc32 value for structure */
++    uint32_t crc32;
++} SNAP_BOOT_SELECTION_t;
++
++#endif
+diff --git a/makefile b/makefile
+index 531aa127..4dd03ff8 100644
+--- a/makefile
++++ b/makefile
+@@ -107,6 +107,10 @@ ifeq ($(VERIFIED_BOOT),1)
+   endif
+ endif
+ 
++ifeq ($(SNAPPY_BOOT),1)
++  DEFINES += SNAPPY_BOOT=1
++endif
++
+ ifeq ($(USER_BUILD_VARIANT),true)
+   DEFINES += USER_BUILD_VARIANT=1
+ endif
+-- 
+2.22.0
+
