@@ -1,0 +1,44 @@
+From f28ea89c19c2f04dde723062808b13bfd7eb1eb2 Mon Sep 17 00:00:00 2001
+From: Ondrej Kubik <ondrej.kubik@canonical.com>
+Date: Fri, 26 Apr 2019 15:00:43 +0000
+Subject: [PATCH 2/5] allow flashing of all partitions
+
+Signed-off-by: Ondrej Kubik <ondrej.kubik@canonical.com>
+---
+ app/aboot/aboot.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/app/aboot/aboot.c b/app/aboot/aboot.c
+index 8f911062..66884ad7 100644
+--- a/app/aboot/aboot.c
++++ b/app/aboot/aboot.c
+@@ -2145,7 +2145,7 @@ static bool critical_flash_allowed(const char * entry)
+ 		if(!strcmp(entry, critical_flash_allowed_ptn[i]))
+ 			return true;
+ 	}
+-	return false;
++	return true;
+ }
+ 
+ #if DEVICE_TREE
+@@ -2528,7 +2528,7 @@ void cmd_erase(const char *arg, void *data, unsigned sz)
+ 		return;
+ 	}
+ #endif
+-
++/*
+ #if VERIFIED_BOOT
+ 	if(!device.is_unlocked)
+ 	{
+@@ -2536,7 +2536,7 @@ void cmd_erase(const char *arg, void *data, unsigned sz)
+ 		return;
+ 	}
+ #endif
+-
++*/
+ 	if(target_is_emmc_boot())
+ 		cmd_erase_mmc(arg, data, sz);
+ 	else
+-- 
+2.22.0
+
