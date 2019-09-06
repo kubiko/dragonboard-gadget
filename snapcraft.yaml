@@ -1,5 +1,5 @@
 name: dragonboard
-version: 18-3-lk
+version: 18-3-lk-bootimg
 summary: Dragonboard support package
 description: |
  Support files for booting the 96boards dragonboard
@@ -137,7 +137,7 @@ parts:
             wget https://raw.githubusercontent.com/kubiko/snapd/lk-next/include/snappy_boot_v1.h
         override-build: |
             gcc lk-boot-env.c -I/usr/include/ -o lk-boot-env
-            ./lk-boot-env --write ${SNAPCRAFT_PART_INSTALL}/snapbootsel.bin $( ./parse-yaml.sh ${SNAPCRAFT_PROJECT_DIR}/gadget.yaml )
+            ./lk-boot-env --write ${SNAPCRAFT_PART_INSTALL}/snapbootsel.bin $( ./parse-yaml.sh ${SNAPCRAFT_PROJECT_DIR}/gadget.yaml ) --bootimg-file=boot_db410.img
             ln -sf snapbootsel.bin ${SNAPCRAFT_PART_INSTALL}/lk.conf
 
 slots:
