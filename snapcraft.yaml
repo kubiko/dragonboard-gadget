@@ -82,6 +82,20 @@ parts:
             - -blobs/gpt_empty*
 
 
+    snap-boot-sel-env:
+        plugin: nil
+        source: snap-boot-sel
+        source-type: local
+        build-packages:
+            - wget
+        override-pull: |
+            snapcraftctl pull
+            wget https://raw.githubusercontent.com/kubiko/snapd/lk-next/include/snappy_boot_v1.h
+        override-build: |
+            gcc lk-boot-env.c -I/usr/include/ -o lk-boot-env
+            ./lk-boot-env --write ${SNAPCRAFT_PART_INSTALL}/snapbootsel.bin $( ./parse-yaml.sh ${SNAPCRAFT_PROJECT_DIR}/gadget.yaml )
+            ln -sf snapbootsel.bin ${SNAPCRAFT_PART_INSTALL}/lk.conf
+
 slots:
   serialtty-0:
     interface: serial-port
