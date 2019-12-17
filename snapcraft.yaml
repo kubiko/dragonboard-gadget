@@ -40,14 +40,6 @@ parts:
             - CONFIG_SUPPORT_RAW_INITRD=y
         target-arch: arm
         target-cross-compiler-prefix: aarch64-linux-gnu-
-        build-packages:
-            - device-tree-compiler
-            - libfdt-dev
-            - python
-            - curl
-            - libssl-dev
-            - bison
-            - flex
         override-pull: |
             snapcraftctl pull
             if ls ${SNAPCRAFT_PROJECT_DIR}/u-boot-generic*.patch 1> /dev/null 2>&1; then
@@ -91,14 +83,6 @@ parts:
             - CONFIG_SUPPORT_RAW_INITRD=y
         target-arch: arm
         target-cross-compiler-prefix: aarch64-linux-gnu-
-        build-packages:
-            - device-tree-compiler
-            - libfdt-dev
-            - python
-            - curl
-            - libssl-dev
-            - bison
-            - flex
         override-pull: |
             snapcraftctl pull
             if ls ${SNAPCRAFT_PROJECT_DIR}/u-boot-generic*.patch 1> /dev/null 2>&1; then
@@ -155,8 +139,6 @@ parts:
     emmc-gpt-partition:
         plugin: nil
         source: qdl
-        build-packages:
-            - python
         override-build: |
             echo "Updating partitions.xml sizes from gadget.yaml"
             sizes=$(grep -e 'size' ${SNAPCRAFT_PROJECT_DIR}/gadget.yaml | awk -F ": " '{ print $2}')
@@ -192,6 +174,15 @@ parts:
         source: git://codeaurora.org/quic/kernel/skales
         prime:
             - -*
+
+build-packages:
+    - device-tree-compiler
+    - libfdt-dev
+    - python
+    - curl
+    - libssl-dev
+    - bison
+    - flex
 
 slots:
   serialtty-0:
