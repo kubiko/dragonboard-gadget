@@ -162,6 +162,14 @@ parts:
         prime:
             - -*
 
+    signlk:
+        plugin: dump
+        source: https://git.linaro.org/landing-teams/working/qualcomm/signlk.git
+        source-depth: 1
+        source-type: git
+        prime:
+            - -*
+
 slots:
   serialtty-0:
     interface: serial-port
