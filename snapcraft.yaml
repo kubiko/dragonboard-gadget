@@ -91,8 +91,18 @@ parts:
             - -blobs/gpt_backup0.bin
             - -blobs/gpt_both0.bin
             - -blobs/gpt_main0.bin
-            - -blobs/rawprogram.xml
-            - -blobs/patch.xml
+            - -blobs/emmc_appsboot.mbn
+            - -blobs/rawprogram*
+            - -blobs/patch*
+            - -blobs/fs_image_*
+
+    partioning-tool:
+        plugin: dump
+        source: https://git.linaro.org/landing-teams/working/qualcomm/partioning_tool.git
+        organize:
+            LICENSE: LICENSE_for_ptool
+        prime:
+            - -*
 
     emmc-gpt-partition:
         plugin: nil
