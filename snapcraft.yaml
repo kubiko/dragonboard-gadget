@@ -21,21 +21,6 @@ parts:
         organize:
             '*': blobs/
 
-
-    sd-build-blobs:
-        plugin: dump
-        source: https://releases.linaro.org/96boards/dragonboard410c/linaro/rescue/17.09/dragonboard410c_bootloader_sd_linux-88.zip
-        source-type: zip
-        organize:
-             '*': blobs/
-             'emmc_appsboot.mbn': 'blobs/sd_appsboot.mbn'
-             'sbl1.mbn': 'blobs/sbl1_sd.mbn'
-        stage:
-            - -blobs/MD5SUMS.txt
-            - -blobs/NON-HLOS.bin
-            - -blobs/hyp.mbn
-            - -blobs/tz.mbn
-
     emmc-build-blobs:
         plugin: dump
         source: https://releases.linaro.org/96boards/dragonboard410c/linaro/rescue/latest/dragonboard-410c-bootloader-emmc-linux-*.zip
