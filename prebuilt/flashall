@@ -13,6 +13,7 @@ fastboot erase boot_a
 fastboot erase writable
 
 fastboot flash boot_a boot-db410c.img
+fastboot flash boot_r boot-db410c.img
 fastboot flash snapbootsel snapbootsel.bin
 fastboot flash snapbootselbak snapbootsel.bin
-fastboot flash writable writable.img
+fastboot flash seed seed.img

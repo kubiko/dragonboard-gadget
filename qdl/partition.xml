@@ -26,7 +26,10 @@
        <partition label="snapbootselbak" size_in_kb="snapbootselbak-size" type="B214D5E4-D442-45E6-B8C6-01BDCD82D396" bootable="false" readonly="false" filename="snapbootsel.bin"/>
        <partition label="boot_a" size_in_kb="boot_a-size" type="20117F86-E985-4357-B9EE-374BC1D8487D" bootable="false" readonly="true" filename="boot-db410c.img"/>
        <partition label="boot_b" size_in_kb="boot_b-size" type="20117F86-E985-4357-B9EE-374BC1D8487D" bootable="false" readonly="true"/>
-       <partition label="writable" size_in_kb="writable-size" type="0FC63DAF-8483-4772-8E79-3D69D8477DE4" bootable="false" readonly="false" filename="writable.raw"/>
+       <partition label="boot_r" size_in_kb="boot_r-size" type="33E4770F-6129-40C8-A93D-14C44375A941" bootable="false" readonly="false" filename="boot-410c.img"/>
+       <partition label="seed" size_in_kb="seed-size" type="83,0FC63DAF-8483-4772-8E79-3D69D8477DE4" bootable="false" readonly="false" filename="seed.raw" sparse="true"/>
+       <partition label="save" size_in_kb="save-size" type="83,0FC63DAF-8483-4772-8E79-3D69D8477DE4" bootable="false" readonly="false" filename="save.raw" sparse="true"/>
+       <partition label="writable" size_in_kb="writable-size" type="0FC63DAF-8483-4772-8E79-3D69D8477DE4" bootable="false" readonly="false" sparse="true"/>
   </physical_partition>
 
 </configuration>
