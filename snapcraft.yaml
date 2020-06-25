@@ -137,12 +137,6 @@ parts:
             - blobs/rawprogram.xml
 
 
-    gcc-linaro-aarch64-6-2:
-        plugin: dump
-        source: https://releases.linaro.org/components/toolchain/binaries/6.2-2016.11/aarch64-linux-gnu/gcc-linaro-6.2.1-2016.11-x86_64_aarch64-linux-gnu.tar.xz
-        prime:
-            - -*
-
     skales:
         plugin: dump
         source: git://codeaurora.org/quic/kernel/skales
