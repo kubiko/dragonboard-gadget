@@ -170,6 +170,10 @@ parts:
         prime:
             - -*
 
+build-packages:
+  - wget
+  - python
+
 slots:
   serialtty-0:
     interface: serial-port
