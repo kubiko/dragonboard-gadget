@@ -1,14 +1,18 @@
 device-tree-origin: kernel
-device-tree: qcom/apq8016-sbc.dtb
 volumes:
   dragonboard:
     schema: gpt
-    bootloader: u-boot
+    bootloader: lk
     structure:
+      - name: cdt
+        size: 2048
+        type: A19F205F-CCD8-4B6D-8F1E-2D9BC24CFFB1
+        content:
+            - image: blobs/sbc_1.0_8016.bin
       - name: sbl1
         size: 1048576
         content:
-            - image: blobs/sbl1_sd.mbn
+            - image: blobs/sbl1.mbn
         type: DEA0BA2C-CBDD-4805-B4F9-F428251C3E98
       - name: rpm
         size: 1048576
@@ -33,16 +37,31 @@ volumes:
         content:
             - image: blobs/sd_appsboot.mbn
         type: 400FFDCD-22E0-47E7-9A23-F16ED9382388
-      - name: boot
-        size: 1048576
+      - name: snapbootsel
+        size: 131072
+        role: system-boot-select
         content:
-            - image: blobs/sd_u-boot.img
+            - image: snapbootsel.bin
+        type: B214D5E4-D442-45E6-B8C6-01BDCD82D396
+      - name: snapbootselbak
+        size: 131072
+        role: system-boot-select
+        content:
+            - image: snapbootsel.bin
+        type: B214D5E4-D442-45E6-B8C6-01BDCD82D396
+      - name: boot_a
+        size: 31457280
+        # content:
+        #     - image: boot.img
         type: 20117F86-E985-4357-B9EE-374BC1D8487D
-      - name: system-boot
-        type: 0C,EBD0A0A2-B9E5-4433-87C0-68B6B72699C7
-        filesystem: vfat
-        filesystem-label: system-boot
-        size: 128M
-        content:
-          - source: blobs/
-            target: blobs/
+        role: system-boot-image
+      - name: boot_b
+        size: 31457280
+        type: 20117F86-E985-4357-B9EE-374BC1D8487D
+        role: system-boot-image
+      - name: writable
+        filesystem: ext4
+        filesystem-label: writable
+        size: 1G
+        type: 83,0FC63DAF-8483-4772-8E79-3D69D8477DE4
+        role: system-data
