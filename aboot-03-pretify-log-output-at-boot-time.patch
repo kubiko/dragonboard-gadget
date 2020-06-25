@@ -1,0 +1,34 @@
+From 1b3268cc04e02948b38e9c37262ddbf9e766dfb3 Mon Sep 17 00:00:00 2001
+From: Ondrej Kubik <ondrej.kubik@canonical.com>
+Date: Tue, 30 Apr 2019 09:40:05 +0100
+Subject: [PATCH 5/6] ubuntu: pretify log output at boot time
+
+Signed-off-by: Ondrej Kubik <ondrej.kubik@canonical.com>
+---
+ app/aboot/aboot.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/app/aboot/aboot.c b/app/aboot/aboot.c
+index 34512a7d..4b9f12e4 100644
+--- a/app/aboot/aboot.c
++++ b/app/aboot/aboot.c
+@@ -927,6 +927,7 @@ static void verify_signed_bootimg(uint32_t bootimg_addr, uint32_t bootimg_size)
+ 					   auth_algo);
+ #endif
+ 	dprintf(INFO, "Authenticating boot image: done return value = %d\n", ret);
++	dprintf(INFO, "boot image tampered: [%s]\n", ret == 1 ? "no" : "yes");
+ 
+ 	if (ret)
+ 	{
+@@ -1148,7 +1149,7 @@ int boot_linux_from_mmc(void)
+ 		if (rcode <= 0) {
+ 			boot_into_ffbm = false;
+ 			if (rcode < 0)
+-				dprintf(CRITICAL,"failed to get ffbm cookie");
++				dprintf(CRITICAL,"failed to get ffbm cookie\n");
+ 		} else
+ 			boot_into_ffbm = true;
+ 	} else
+-- 
+2.26.2
+
