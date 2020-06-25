@@ -153,12 +153,6 @@ parts:
             ln -sf snapbootsel.bin ${SNAPCRAFT_PART_INSTALL}/lk.conf
 
 
-    skales:
-        plugin: dump
-        source: git://codeaurora.org/quic/kernel/skales
-        prime:
-            - -*
-
 slots:
   serialtty-0:
     interface: serial-port
