@@ -1,18 +1,79 @@
 #!/bin/sh
 
-fastboot flash partition gpt_both0.bin
-fastboot flash hyp hyp.mbn
-fastboot flash rpm rpm.mbn
-fastboot flash sbl1 sbl1.mbn
-fastboot flash tz tz.mbn
-[ -e sec.dat ] && fastboot flash sec sec.dat
-fastboot flash cdt sbc_1.0_8016.bin
-fastboot flash aboot emmc_appsboot.mbn
+if [ "${1}" = "-h" ] || [ "${1}" = "--help" ]; then
+  echo -e "Device flash helper scrip:"
+  echo -e "$ flashall [options]\n"
+  echo -e "Script assumes fastboot being available in the path"
+  echo -e "By default only partitions essential to boot are re-flashed"
+  echo -e "\t\tboot_ra, ubuntu-seed, snapbootsel(bak), snaprecoverysel(bak)"
+  echo -e "\nOptional parameters:"
+  echo -e "\t-f | --full: repartition emmc, but do not erase ubuntu-save partition"
+  echo -e "\t-H | --hard-reset: same as full + format of ubuntu-save partition"
+  echo -e "\t-r | --reboot: reboot device when flashing is completed"
+  echo -e "\t-h | --help: this help"
+  exit
+fi
+unset FORMAT REBOOT
+while [ "$1" != "" ]; do
+    case $1 in
+        -f | --repartition)
+            REPARTITION="true"
+            ;;
+        -H | --hard-reset)
+            echo "!!!!! Device will be completely erased prior to flashing !!!!!"
+            REPARTITION="true"
+            FORMAT_HARD="true"
+            ;;
+        -r | --reboot)
+            REBOOT="true"
+            ;;
+        --help | -h)
+            print_usage
+            exit
+            ;;
+        *)
+            # check if this is model assertion
+            echo "Unknown parameter '$1'"
+            print_usage
+            exit
+            ;;
+    esac
+    shift
+done
 
-fastboot erase boot_a
-fastboot erase writable
+# by default do not flash new partition, only reflash
+if [ "${REPARTITION}" = "true" ]; then
+  echo "Repartitioning..."
+  fastboot flash partition gpt_both0.bin
+  fastboot flash hyp hyp.mbn
+  fastboot flash rpm rpm.mbn
+  fastboot flash sbl1 sbl1.mbn
+  fastboot flash tz tz.mbn
+  [ -e sec.dat ] && fastboot flash sec sec.dat
+  [ -e fs_image_linux.tar.gz.mbn.img ] && fastboot flash fsg fs_image_linux.tar.gz.mbn.img
+  fastboot flash cdt sbc_1.0_8016.bin
+  fastboot flash aboot emmc_appsboot.mbn
+fi
 
-fastboot flash boot_a boot-db410c.img
+echo "Cleaning boot critical partitions"
+fastboot erase boot_ra
+fastboot format ubuntu-data
+fastboot erase snapbootsel
+fastboot erase snapbootselbak
+fastboot erase snaprecoverysel
+fastboot erase snaprecoveryselbak
+if [ "${FORMAT_HARD}" = "true" ]; then
+  fastboot erase ubuntu-save
+fi
+
+echo "Flashing Ubuntu images"
+fastboot flash boot_ra boot-db410c.img
+fastboot flash snaprecoverysel snaprecoverysel.bin
+fastboot flash snaprecoveryselbak snaprecoverysel.bin
 fastboot flash snapbootsel snapbootsel.bin
 fastboot flash snapbootselbak snapbootsel.bin
-fastboot flash writable writable.img
+fastboot flash ubuntu-seed ubuntu-seed.img
+
+if [ "${REBOOT}" = "true" ]; then
+  fastboot reboot
+fi
