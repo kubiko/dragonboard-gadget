@@ -1,11 +1,11 @@
 name: dragonboard
-version: 18-4-lk
+version: 20-1-lk
 summary: Dragonboard support package
 description: |
  Support files for booting the 96boards dragonboard
 type: gadget
 
-base: core18
+base: core20
 
 architectures:
   - build-on: [amd64, arm64]
@@ -34,7 +34,7 @@ parts:
               git apply ${SNAPCRAFT_PROJECT_DIR}/aboot-*.patch
           fi
           # get refrence snappy boot environment
-          wget https://raw.githubusercontent.com/snapcore/snapd/master/include/lk/snappy_boot_v1.h -O app/aboot/snappy_boot_v1.h
+          wget https://raw.githubusercontent.com/snapcore/snapd/master/include/lk/snappy_boot_v2.h -O app/aboot/snappy_boot_v2.h
           wget https://raw.githubusercontent.com/snapcore/snapd/master/include/lk/snappy_boot_common.h -O app/aboot/snappy_boot_common.h
         override-build: |
           export TOOLCHAIN_PREFIX=${SNAPCRAFT_STAGE}/arm-eabi-4.8/bin/arm-eabi-
@@ -117,15 +117,20 @@ parts:
         source-type: local
         override-pull: |
             snapcraftctl pull
-            wget https://raw.githubusercontent.com/snapcore/snapd/master/include/lk/snappy_boot_v1.h
+            wget https://raw.githubusercontent.com/snapcore/snapd/master/include/lk/snappy_boot_v2.h
             wget https://raw.githubusercontent.com/snapcore/snapd/master/include/lk/snappy_boot_common.h
         override-build: |
             gcc lk-boot-env.c -I/usr/include/ -o lk-boot-env
             # configure initial boot environment
-            ./lk-boot-env --write ${SNAPCRAFT_PART_INSTALL}/snapbootsel.bin \
+            ./lk-boot-env --runtime --write ${SNAPCRAFT_PART_INSTALL}/snapbootsel.bin \
                           --bootimg-file boot-db410c.img \
-                          $( ./parse-yaml.sh ${SNAPCRAFT_PROJECT_DIR}/gadget.yaml )
-            ln -sf snapbootsel.bin ${SNAPCRAFT_PART_INSTALL}/lk.conf
+                          $( ./parse-yaml.sh ${SNAPCRAFT_PROJECT_DIR}/gadget.yaml runtime )
+            ./lk-boot-env --recovery --write ${SNAPCRAFT_PART_INSTALL}/snaprecoverysel.bin \
+                          --bootimg-file boot-db410c.img \
+                          $( ./parse-yaml.sh ${SNAPCRAFT_PROJECT_DIR}/gadget.yaml recovery )
+            ln -sf snaprecoverysel.bin ${SNAPCRAFT_PART_INSTALL}/lk.conf
+        organize:
+            snapbootsel.bin: blobs/snapbootsel.bin
 
     arm-eabi-4-8:
         plugin: dump
