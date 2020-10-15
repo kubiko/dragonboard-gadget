@@ -147,7 +147,7 @@ parts:
 
 build-packages:
   - wget
-  - python
+  - python2
 
 slots:
   serialtty-0:
