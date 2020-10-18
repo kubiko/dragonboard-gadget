@@ -100,7 +100,7 @@ parts:
                     -e 's/\"'"${name}"'-size\"/\"'"${size}"'\"/g' \
                     partition.xml
             done
-            python ${SNAPCRAFT_STAGE}/ptool.py -x partition.xml -t ${SNAPCRAFT_PART_INSTALL}/
+            python2 ${SNAPCRAFT_STAGE}/ptool.py -x partition.xml -t ${SNAPCRAFT_PART_INSTALL}/
         organize:
              '*': blobs/
              rawprogram0.xml: rawprogram.xml
