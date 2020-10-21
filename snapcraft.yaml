@@ -71,9 +71,9 @@ parts:
             - -blobs/patch*
             - -blobs/fs_image_*
 
-    partioning-tool:
+    partitioning-tool:
         plugin: dump
-        source: https://git.linaro.org/landing-teams/working/qualcomm/partioning_tool.git
+        source: https://github.com/kubiko/partitioning_tool.git
         organize:
             LICENSE: LICENSE_for_ptool
         prime:
@@ -83,7 +83,7 @@ parts:
         plugin: nil
         source: qdl
         after:
-            - partioning-tool
+            - partitioning-tool
         override-build: |
             echo "Updating partition.xml sizes from gadget.yaml"
             sizes=$(grep -e 'size' ${SNAPCRAFT_PROJECT_DIR}/gadget.yaml | awk -F ": " '{ print $2}')
