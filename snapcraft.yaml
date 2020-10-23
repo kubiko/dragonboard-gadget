@@ -69,7 +69,6 @@ parts:
             - -blobs/emmc_appsboot.mbn
             - -blobs/rawprogram*
             - -blobs/patch*
-            - -blobs/fs_image_*
 
     partitioning-tool:
         plugin: dump
